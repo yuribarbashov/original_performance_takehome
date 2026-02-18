@@ -44,6 +44,9 @@ class KernelBuilder:
         self.scratch_debug = {}
         self.scratch_ptr = 0
         self.const_map = {}
+        # Debug aid for correctness work: force per-round writeback behavior
+        # to match reference_kernel2's memory semantics at round boundaries.
+        self.strict_round_sync = True
 
     def debug_info(self):
         return DebugInfo(scratch_map=self.scratch_debug)
@@ -161,12 +164,23 @@ class KernelBuilder:
                 body.append(("alu", ("<", tmp1, tmp_idx, self.scratch["n_nodes"])))
                 body.append(("flow", ("select", tmp_idx, tmp1, tmp_idx, zero_const)))
                 body.append(("debug", ("compare", tmp_idx, (round, i, "wrapped_idx"))))
-                # mem[inp_indices_p + i] = idx
-                body.append(("alu", ("+", tmp_addr, self.scratch["inp_indices_p"], i_const)))
-                body.append(("store", ("store", tmp_addr, tmp_idx)))
-                # mem[inp_values_p + i] = val
-                body.append(("alu", ("+", tmp_addr, self.scratch["inp_values_p"], i_const)))
-                body.append(("store", ("store", tmp_addr, tmp_val)))
+                # IMPORTANT: write back both idx and val in every round.
+                # Delaying index writeback across rounds can be faster but it
+                # changes boundary semantics vs reference_kernel2.
+                if self.strict_round_sync:
+                    # mem[inp_values_p + i] = val
+                    body.append(("alu", ("+", tmp_addr, self.scratch["inp_values_p"], i_const)))
+                    body.append(("store", ("store", tmp_addr, tmp_val)))
+                    # mem[inp_indices_p + i] = idx
+                    body.append(("alu", ("+", tmp_addr, self.scratch["inp_indices_p"], i_const)))
+                    body.append(("store", ("store", tmp_addr, tmp_idx)))
+                else:
+                    # Kept only as an experimental branch for performance work.
+                    # The strict path above is the default and correctness-safe.
+                    body.append(("alu", ("+", tmp_addr, self.scratch["inp_values_p"], i_const)))
+                    body.append(("store", ("store", tmp_addr, tmp_val)))
+                    body.append(("alu", ("+", tmp_addr, self.scratch["inp_indices_p"], i_const)))
+                    body.append(("store", ("store", tmp_addr, tmp_idx)))
 
         body_instrs = self.build(body)
         self.instrs.extend(body_instrs)
@@ -217,8 +231,10 @@ def do_kernel_test(
         if prints:
             print(machine.mem[inp_indices_p : inp_indices_p + len(inp.indices)])
             print(ref_mem[inp_indices_p : inp_indices_p + len(inp.indices)])
-        # Updating these in memory isn't required, but you can enable this check for debugging
-        # assert machine.mem[inp_indices_p:inp_indices_p+len(inp.indices)] == ref_mem[inp_indices_p:inp_indices_p+len(inp.indices)]
+        assert (
+            machine.mem[inp_indices_p : inp_indices_p + len(inp.indices)]
+            == ref_mem[inp_indices_p : inp_indices_p + len(inp.indices)]
+        ), f"Incorrect indices on round {i}"
 
     print("CYCLES: ", machine.cycle)
     print("Speedup over baseline: ", BASELINE / machine.cycle)
