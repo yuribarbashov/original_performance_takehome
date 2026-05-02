@@ -1,6 +1,6 @@
 """Pilk agent helpers.
 
-Geometry helpers are delegated to :mod:`agents.systems.geometry`.
+Geometry and routing helpers are delegated to :mod:`agents.systems` modules.
 """
 
 from agents.systems.geometry import (
@@ -9,10 +9,20 @@ from agents.systems.geometry import (
     segment_intersects_circle,
     segments_intersect,
 )
+from agents.systems.routing import (
+    RoutingDecision,
+    choose_heading_aim_vector,
+    estimate_eta,
+    predict_moving_target_intercept,
+)
 
 __all__ = [
     "distance",
     "segments_intersect",
     "segment_intersects_circle",
     "path_hits_planet_or_sun",
+    "RoutingDecision",
+    "choose_heading_aim_vector",
+    "estimate_eta",
+    "predict_moving_target_intercept",
 ]
