@@ -16,6 +16,8 @@ from agents.systems.routing import (
     predict_moving_target_intercept,
 )
 
+from agents.systems.world import WorldState
+
 __all__ = [
     "distance",
     "segments_intersect",
@@ -25,4 +27,5 @@ __all__ = [
     "choose_heading_aim_vector",
     "estimate_eta",
     "predict_moving_target_intercept",
+    "WorldState",
 ]
